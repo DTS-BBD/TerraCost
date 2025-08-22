@@ -5,6 +5,7 @@ from typing import List
 from pydantic import BaseModel, Field
 from services.aws_cost_service import AwsCostService
 from services.terraform_parser import parse_infrastructure
+from services.suggest_service import suggest_best_value, suggest_budget, suggest_savings
 
 __version__ = "0.1.0"
 
@@ -44,30 +45,6 @@ def parse_timeframe(tf: str) -> float:
     else:
         raise ValueError(f"Invalid timeframe unit: {unit}")
 
-def build_costs(config: dict, service):
-    costs = {}
-
-    if "ec2" in config:
-        for idx, ec2 in enumerate(config["ec2"], start=1):
-            instance_type = ec2.get("instance_type")
-            if instance_type:
-                key = f"aws_instance.web_server_{idx}"
-                costs[key] = service.get_ec2_instance_price(instance_type) or 0
-
-    if "rds" in config:
-        for idx, rds in enumerate(config["rds"], start=1):
-            instance_class = rds.get("instance_class")
-            if instance_class:
-                key = f"aws_rds_instance.db_{idx}"
-                costs[key] = service.get_rds_price(instance_class) or 0
-
-    if "s3" in config:
-        for idx, s3 in enumerate(config["s3"], start=1):
-            # You’ll need to decide how to estimate storage — hardcode for now (e.g. 50GB)
-            key = f"aws_s3_bucket.bucket_{idx}"
-            costs[key] = service.get_s3_bucket_price(storage_gb=50) or 0
-
-    return costs
 
 def estimate_cost(months: float, verbose: bool, infrastucture: dict) -> CostEstimate:
     """
@@ -75,7 +52,7 @@ def estimate_cost(months: float, verbose: bool, infrastucture: dict) -> CostEsti
     """
     service = AwsCostService()
 
-    costs = build_costs(infrastucture, service)
+    costs = service.build_costs(infrastucture)
 
     breakdown = [ResourceCost(name=r, monthly_cost=c * months) for r, c in costs.items()]
     total = sum(rc.monthly_cost for rc in breakdown)
@@ -144,6 +121,26 @@ def main():
         help="Timeframe for cost estimation (Xd, Xm, Xy). Default: 1m"
     )
 
+    suggest_parser.add_argument(
+        "-f", "--file", type=str, help="Folder location with your infrastructure"
+    )
+
+    suggest_parser.add_argument(
+        "--budget", type=float,
+        help="Suggests infrastructure combination based on provided budget"
+    )
+
+    suggest_parser.add_argument(
+        "--savings", action="store_true",
+        help="Suggest infrastructure combinations at different saving levels"
+    )
+
+    suggest_parser.add_argument(
+        "--bestvalue", action="store_true",
+        help="Suggest infrastructure that offers the best bang for your buck"
+    )
+
+
     args = parser.parse_args()
 
     # ---- handle version ----
@@ -161,7 +158,16 @@ def main():
     # ---- suggest ----
     elif args.command == "suggest":
         months = parse_timeframe(args.timeframe)
-        suggest_cost_optimizations(months=months)
+        infrastructureFile = args.file
+        infrastructure = parse_infrastructure(infrastructureFile)
+        if args.budget:
+            suggest_budget(args.budget, infrastructure)
+        elif args.savings:
+            suggest_savings(infrastructure)
+        elif args.bestvalue:
+            suggest_best_value(infrastructure)
+        else:
+            print("⚠️ Please provide one option: --budget, --savings, or --best-value")
 
     else:
         parser.print_help()

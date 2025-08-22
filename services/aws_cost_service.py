@@ -86,3 +86,28 @@ class AwsCostService:
                         price_per_hour = float(pd["pricePerUnit"]["USD"])
                         return price_per_hour * 720
         return None
+
+    def build_costs(self, config: dict):
+        costs = {}
+
+        if "ec2" in config:
+            for idx, ec2 in enumerate(config["ec2"], start=1):
+                instance_type = ec2.get("instance_type")
+                if instance_type:
+                    key = f"aws_instance.web_server_{idx}"
+                    costs[key] = self.get_ec2_instance_price(instance_type) or 0
+
+        if "rds" in config:
+            for idx, rds in enumerate(config["rds"], start=1):
+                instance_class = rds.get("instance_class")
+                if instance_class:
+                    key = f"aws_rds_instance.db_{idx}"
+                    costs[key] = self.get_rds_price(instance_class) or 0
+
+        if "s3" in config:
+            for idx, s3 in enumerate(config["s3"], start=1):
+                # You’ll need to decide how to estimate storage — hardcode for now (e.g. 50GB)
+                key = f"aws_s3_bucket.bucket_{idx}"
+                costs[key] = self.get_s3_bucket_price(storage_gb=50) or 0
+
+        return costs
