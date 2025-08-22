@@ -4,6 +4,7 @@ import re
 from typing import List
 from pydantic import BaseModel, Field
 from services.aws_cost_service import AwsCostService
+from services.terraform_parser import parse_infrastructure
 
 __version__ = "0.1.0"
 
@@ -43,17 +44,38 @@ def parse_timeframe(tf: str) -> float:
     else:
         raise ValueError(f"Invalid timeframe unit: {unit}")
 
-def estimate_cost(months: float, verbose: bool) -> CostEstimate:
+def build_costs(config: dict, service):
+    costs = {}
+
+    if "ec2" in config:
+        for idx, ec2 in enumerate(config["ec2"], start=1):
+            instance_type = ec2.get("instance_type")
+            if instance_type:
+                key = f"aws_instance.web_server_{idx}"
+                costs[key] = service.get_ec2_instance_price(instance_type) or 0
+
+    if "rds" in config:
+        for idx, rds in enumerate(config["rds"], start=1):
+            instance_class = rds.get("instance_class")
+            if instance_class:
+                key = f"aws_rds_instance.db_{idx}"
+                costs[key] = service.get_rds_price(instance_class) or 0
+
+    if "s3" in config:
+        for idx, s3 in enumerate(config["s3"], start=1):
+            # You’ll need to decide how to estimate storage — hardcode for now (e.g. 50GB)
+            key = f"aws_s3_bucket.bucket_{idx}"
+            costs[key] = service.get_s3_bucket_price(storage_gb=50) or 0
+
+    return costs
+
+def estimate_cost(months: float, verbose: bool, infrastucture: dict) -> CostEstimate:
     """
     Dummy cost estimation (to be replaced with Terraform parsing + cloud pricing).
     """
     service = AwsCostService()
 
-    costs = {
-        "aws_instance.web_server": service.get_ec2_instance_price("t2.small") or 0,
-        "aws_s3_bucket.logs": service.get_s3_bucket_price(storage_gb=50) or 0,
-        "aws_rds_instance.prod_db": service.get_rds_price("db.t3.medium") or 0,
-    }
+    costs = build_costs(infrastucture, service)
 
     breakdown = [ResourceCost(name=r, monthly_cost=c * months) for r, c in costs.items()]
     total = sum(rc.monthly_cost for rc in breakdown)
@@ -64,7 +86,6 @@ def estimate_cost(months: float, verbose: bool) -> CostEstimate:
         breakdown=breakdown
     )
 
-    # Print to console
     print(f"\nEstimated Cost for {months:.1f} month(s): ${estimate.total_cost:.2f}\n")
     if verbose:
         print("Breakdown (per resource):")
@@ -112,6 +133,10 @@ def main():
         help="Timeframe for cost estimation (Xd, Xm, Xy). Default: 1m"
     )
 
+    plan_parser.add_argument(
+        "-f", "--file", type=str, help="Folder location with your infrastructure"
+    )
+
     # ---- suggest ----
     suggest_parser = subparsers.add_parser("suggest", help="Suggest cost optimizations")
     suggest_parser.add_argument(
@@ -129,7 +154,9 @@ def main():
     # ---- plan ----
     if args.command == "plan":
         months = parse_timeframe(args.timeframe)
-        estimate_cost(months=months, verbose=args.verbose)
+        infrastructureFile = args.file
+        infrastructure = parse_infrastructure(infrastructureFile)
+        estimate_cost(months=months, verbose=args.verbose, infrastucture=infrastructure)
 
     # ---- suggest ----
     elif args.command == "suggest":
