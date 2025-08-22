@@ -3,6 +3,7 @@ import sys
 import re
 from typing import List
 from pydantic import BaseModel, Field
+from services.aws_cost_service import AwsCostService
 
 __version__ = "0.1.0"
 
@@ -46,11 +47,12 @@ def estimate_cost(months: float, verbose: bool) -> CostEstimate:
     """
     Dummy cost estimation (to be replaced with Terraform parsing + cloud pricing).
     """
-    # Example hardcoded monthly costs
+    service = AwsCostService()
+
     costs = {
-        "aws_instance.web_server": 95,
-        "aws_s3_bucket.logs": 22,
-        "aws_rds_instance.prod_db": 395,
+        "aws_instance.web_server": service.get_ec2_instance_price("t2.small") or 0,
+        "aws_s3_bucket.logs": service.get_s3_bucket_price(storage_gb=50) or 0,
+        "aws_rds_instance.prod_db": service.get_rds_price("db.t3.medium") or 0,
     }
 
     breakdown = [ResourceCost(name=r, monthly_cost=c * months) for r, c in costs.items()]
