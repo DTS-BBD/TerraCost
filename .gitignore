@@ -1,2 +1,8 @@
 __pycache__
 .env
+
+# Terraform
+.terraform
+
+terracost.egg-info/
+*.egg-info/

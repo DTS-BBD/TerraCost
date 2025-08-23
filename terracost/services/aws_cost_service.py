@@ -1,24 +1,41 @@
 import requests
+from .base_cost_service import BaseCostService
 
-class AwsCostService:
+class AwsCostService(BaseCostService):
     BASE_URL = "https://pricing.us-east-1.amazonaws.com/offers/v1.0/aws"
 
     def __init__(self, region_code="us-east-1"):
-        self.region_code = region_code
+        super().__init__(region_code)
         self.region_name_map = {
             "us-east-1": "US East (N. Virginia)",
             "us-west-2": "US West (Oregon)",
             "eu-west-1": "EU (Ireland)",
         }
 
+    def get_resource_price(self, resource_type: str, **kwargs) -> float:
+        """Get price for a specific AWS resource type"""
+        if resource_type == "ec2":
+            return self.get_ec2_instance_price(kwargs.get("instance_type"), kwargs.get("os", "Linux"))
+        elif resource_type == "rds":
+            return self.get_rds_price(kwargs.get("instance_type"), kwargs.get("engine", "MySQL"))
+        elif resource_type == "s3":
+            return self.get_s3_bucket_price(kwargs.get("storage_gb", 50))
+        else:
+            raise ValueError(f"Unsupported resource type: {resource_type}")
+
     def _load_offer_index(self, service_code: str):
         """
         Load the current price list index for a given service (AmazonEC2, AmazonS3, AmazonRDS, etc.)
         """
+        cache_key = f"aws_offer_index_{service_code}_{self.region_code}"
+        cached_data = self._get_cached_price(cache_key)
+        if cached_data is not None:
+            return cached_data
+        
         url = f"{self.BASE_URL}/{service_code}/current/{self.region_code}/index.json"
-        resp = requests.get(url)
-        resp.raise_for_status()
-        return resp.json()
+        data = self._make_api_request(url)
+        self._cache_price(cache_key, data)
+        return data
 
     def get_ec2_instance_price(self, instance_type: str, os="Linux"):
         """
@@ -106,7 +123,7 @@ class AwsCostService:
 
         if "s3" in config:
             for idx, s3 in enumerate(config["s3"], start=1):
-                # You’ll need to decide how to estimate storage — hardcode for now (e.g. 50GB)
+                # You'll need to decide how to estimate storage — hardcode for now (e.g. 50GB)
                 key = f"aws_s3_bucket.bucket_{idx}"
                 costs[key] = self.get_s3_bucket_price(storage_gb=50) or 0
 
