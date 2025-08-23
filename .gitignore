@@ -3,6 +3,8 @@ __pycache__
 
 # Terraform
 .terraform
+*.hcl
+*.tfvars
 
 terracost.egg-info/
 *.egg-info/

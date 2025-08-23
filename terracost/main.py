@@ -5,7 +5,7 @@ from typing import List
 from pydantic import BaseModel, Field
 from terracost.services.aws_cost_service import AwsCostService
 from terracost.services.azure_cost_service import AzureCostService
-from terracost.services.terraform_executor import TerraformExecutor
+from terracost.services.terraform_file_parser import TerraformFileParser
 from terracost.services.progress_indicator import CostCalculationProgress
 from terracost.services.terraform_parser import detect_provider, parse_infrastructure, parse_azure_infrastructure
 from terracost.services.suggest_service import suggest_best_value, suggest_budget, suggest_savings
@@ -49,22 +49,24 @@ def parse_timeframe(tf: str) -> float:
     else:
         raise ValueError(f"Invalid timeframe unit: {unit}")
 
-def estimate_cost_from_plan(months: float, verbose: bool, working_dir: str) -> CostEstimate:
+def estimate_cost_from_files(months: float, verbose: bool, working_dir: str) -> CostEstimate:
     """
-    Estimate costs by running terraform plan and analyzing the output
+    Estimate costs by parsing Terraform files directly
     """
     progress = CostCalculationProgress()
-    progress.start()
+    parser = None
     
     try:
-        # Step 1: Run terraform plan
-        progress.next_step()
-        executor = TerraformExecutor(working_dir)
-        plan_result = executor.run_terraform_plan(show_progress=False)
+        progress.start()
         
-        # Step 2: Parse infrastructure changes
+        # Step 1: Parse Terraform files
         progress.next_step()
-        resources = plan_result['resources']
+        parser = TerraformFileParser(working_dir)
+        parse_result = parser.parse_terraform_files(show_progress=True)
+        
+        # Step 2: Extract resource information
+        progress.next_step()
+        resources = parse_result['resources']
         
         # Step 3: Fetch cloud pricing data
         progress.next_step()
@@ -84,6 +86,7 @@ def estimate_cost_from_plan(months: float, verbose: bool, working_dir: str) -> C
             raise NotImplementedError("GCP cost estimation not yet implemented")
         else:
             service = AwsCostService()
+            # Pass AWS resources directly to the cost service for dynamic processing
             infrastructure = resources.get('aws', {})
         
         # Step 4: Calculate cost estimates
@@ -108,10 +111,14 @@ def estimate_cost_from_plan(months: float, verbose: bool, working_dir: str) -> C
         progress.stop(True)
         
         # Display results
-        _display_cost_estimate(estimate, verbose, plan_result['summary'])
+        _display_cost_estimate(estimate, verbose, parse_result['summary'])
         
         return estimate
         
+    except KeyboardInterrupt:
+        print("\n🛑 Operation cancelled by user")
+        progress.stop(False)
+        sys.exit(1)
     except Exception as e:
         progress.stop(False)
         raise e
@@ -121,12 +128,19 @@ def _display_cost_estimate(estimate: CostEstimate, verbose: bool, plan_summary: 
     print(f"\n📊 Cost Estimate for {estimate.timeframe_months:.1f} month(s)")
     print("=" * 50)
     
-    # Display plan summary
+    # Display infrastructure summary
     if plan_summary:
-        print(f"📋 Infrastructure Changes:")
-        print(f"   ➕ Add: {plan_summary.get('add', 0)} resources")
-        print(f"   🔄 Change: {plan_summary.get('change', 0)} resources")
-        print(f"   🗑️  Destroy: {plan_summary.get('destroy', 0)} resources")
+        print(f"📋 Infrastructure Summary:")
+        print(f"   📁 Total Terraform files: {plan_summary.get('modules_count', 0) + 1}")
+        print(f"   🔧 Total resources: {plan_summary.get('total_resources', 0)}")
+        print(f"   📦 Modules: {plan_summary.get('modules_count', 0)}")
+        
+        # Show provider breakdown
+        provider_counts = plan_summary.get('provider_counts', {})
+        for provider, count in provider_counts.items():
+            if count > 0:
+                provider_emoji = "☁️" if provider == "aws" else "🔷" if provider == "azure" else "🔶"
+                print(f"   {provider_emoji} {provider.upper()} resources: {count}")
         print()
     
     # Display cost breakdown
@@ -266,13 +280,17 @@ def main():
             estimate_cost(months=months, verbose=args.verbose, 
                          infrastructure=infrastructure, provider=provider)
         else:
-            # Use new terraform plan method
+            # Use new terraform file parsing method
             try:
-                estimate_cost_from_plan(months=months, verbose=args.verbose, 
+                estimate_cost_from_files(months=months, verbose=args.verbose, 
                                       working_dir=infrastructure_file)
             except Exception as e:
                 print(f"❌ Error: {str(e)}")
-                print("💡 Try using --legacy flag for basic .tf file parsing")
+                print("\n🔧 Troubleshooting Tips:")
+                print("   • Check if you're in the right directory with Terraform files")
+                print("   • Verify your Terraform configuration is valid")
+                print("   • Use --legacy flag for basic .tf file parsing instead")
+                print("   • Check if .tf files are readable and properly formatted")
                 sys.exit(1)
 
     # ---- suggest ----
