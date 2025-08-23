@@ -9,7 +9,7 @@ load_dotenv()
 
 api_key = os.getenv("OPENAI_API_KEY")
 
-from services.aws_cost_service import AwsCostService
+from .aws_cost_service import AwsCostService
 
 service = AwsCostService()
 
