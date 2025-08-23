@@ -4,7 +4,8 @@ import re
 from typing import List
 from pydantic import BaseModel, Field
 from services.aws_cost_service import AwsCostService
-from services.terraform_parser import parse_infrastructure
+from services.azure_cost_service import AzureCostService
+from services.terraform_parser import detect_provider, parse_infrastructure, parse_azure_infrastructure
 from services.suggest_service import suggest_best_value, suggest_budget, suggest_savings
 
 __version__ = "0.1.0"
@@ -46,13 +47,16 @@ def parse_timeframe(tf: str) -> float:
         raise ValueError(f"Invalid timeframe unit: {unit}")
 
 
-def estimate_cost(months: float, verbose: bool, infrastucture: dict) -> CostEstimate:
+def estimate_cost(months: float, verbose: bool, infrastructure: dict, provider: str) -> CostEstimate:
     """
     Dummy cost estimation (to be replaced with Terraform parsing + cloud pricing).
     """
-    service = AwsCostService()
+    if provider == "azure":
+        service = AzureCostService()
+    else:
+        service = AwsCostService()
 
-    costs = service.build_costs(infrastucture)
+    costs = service.build_costs(infrastructure)
 
     breakdown = [ResourceCost(name=r, monthly_cost=c * months) for r, c in costs.items()]
     total = sum(rc.monthly_cost for rc in breakdown)
@@ -140,7 +144,6 @@ def main():
         help="Suggest infrastructure that offers the best bang for your buck"
     )
 
-
     args = parser.parse_args()
 
     # ---- handle version ----
@@ -151,15 +154,28 @@ def main():
     # ---- plan ----
     if args.command == "plan":
         months = parse_timeframe(args.timeframe)
-        infrastructureFile = args.file
-        infrastructure = parse_infrastructure(infrastructureFile)
-        estimate_cost(months=months, verbose=args.verbose, infrastucture=infrastructure)
+        infrastructure_file = args.file
+        provider = detect_provider(infrastructure_file)
+        
+        if provider == "azure":
+            infrastructure = parse_azure_infrastructure(infrastructure_file)
+        else:
+            infrastructure = parse_infrastructure(infrastructure_file)
+        
+        estimate_cost(months=months, verbose=args.verbose, 
+                     infrastructure=infrastructure, provider=provider)
 
     # ---- suggest ----
     elif args.command == "suggest":
         months = parse_timeframe(args.timeframe)
-        infrastructureFile = args.file
-        infrastructure = parse_infrastructure(infrastructureFile)
+        infrastructure_file = args.file
+        provider = detect_provider(infrastructure_file)
+        
+        if provider == "azure":
+            infrastructure = parse_azure_infrastructure(infrastructure_file)
+        else:
+            infrastructure = parse_infrastructure(infrastructure_file)
+            
         if args.budget:
             suggest_budget(args.budget, infrastructure)
         elif args.savings:

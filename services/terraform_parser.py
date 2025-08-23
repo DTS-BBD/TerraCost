@@ -6,6 +6,16 @@ def parse_tf_file(tf_file):
     """Parse a .tf file into a Python dict using hcl2."""
     with open(tf_file, "r") as f:
         return hcl2.load(f)
+    
+def detect_provider(folder_path):
+    """Detect if infrastructure uses AWS or Azure"""
+    main_tf = os.path.join(folder_path, "main.tf")
+    if os.path.exists(main_tf):
+        with open(main_tf, 'r') as f:
+            content = f.read()
+            if 'provider "azurerm"' in content:
+                return "azure"
+    return "aws"
 
 def parse_infrastructure(folder_path):
     result = {"ec2": [], "rds": [], "s3": []}
@@ -51,4 +61,36 @@ def parse_infrastructure(folder_path):
                                         "bucket": bucket.get("bucket", "default-bucket")
                                     })
 
+    return result
+
+def parse_azure_infrastructure(folder_path):
+    result = {"vm": [], "sql": [], "storage": []}
+    
+    root_main = os.path.join(folder_path, "main.tf")
+    if not os.path.exists(root_main):
+        raise FileNotFoundError(f"No main.tf found in {folder_path}")
+    
+    root_config = parse_tf_file(root_main)
+    
+    for res in root_config.get("resource", []):
+        if "azurerm_virtual_machine" in res:
+            vm = list(res["azurerm_virtual_machine"].values())[0]
+            vm_size = vm.get("vm_size", "Standard_B1s")
+            # Handle Terraform variables by using default values
+            if "${var." in str(vm_size):
+                vm_size = "Standard_B1s"  # default
+            result["vm"].append({
+                "vm_size": vm_size
+            })
+        
+        if "azurerm_sql_database" in res:
+            db = list(res["azurerm_sql_database"].values())[0]
+            tier = db.get("requested_service_objective_name", "Basic")
+            # Handle Terraform variables by using default values
+            if "${var." in str(tier):
+                tier = "Basic"  # default
+            result["sql"].append({
+                "tier": tier
+            })
+    
     return result
