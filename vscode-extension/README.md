@@ -1,71 +1,315 @@
-# vscode-extension README
+# TerraCost
 
-This is the README for your extension "vscode-extension". After writing up a brief description, we recommend including the following sections.
+**Multi-cloud Terraform cost estimation and AI-powered optimization tool**
 
-## Features
+TerraCost is a comprehensive solution that scans your Terraform infrastructure files, estimates costs across AWS, Azure, and GCP, and provides AI-powered suggestions to optimize your cloud spending. Available as both a CLI tool and VS Code extension.
 
-Describe specific features of your extension including screenshots of your extension in action. Image paths are relative to this README file.
+## ✨ Features
 
-For example if there is an image subfolder under your extension project workspace:
+### 🌐 Multi-Cloud Support
+- **AWS**: EC2, S3, Lambda, RDS, and more
+- **Azure**: Virtual Machines, Storage Accounts, App Services
+- **GCP**: Compute Engine, Cloud Storage, Cloud Functions
+- **Unified Cost Analysis**: Compare costs across providers
 
-\!\[feature X\]\(images/feature-x.png\)
+### 🤖 AI-Powered Optimization
+- **Budget Optimization**: Fit infrastructure within target budget
+- **Cost Savings**: Conservative, moderate, and aggressive strategies
+- **Best Value**: Optimal cost-performance balance
+- **Smart Suggestions**: LLM-powered infrastructure recommendations
 
-> Tip: Many popular extensions utilize animations. This is an excellent way to show off your extension! We recommend short, focused animations that are easy to follow.
+### 🚀 CI/CD Integration
+- **Budget Enforcement**: Prevent pipeline execution if costs exceed limits
+- **Cost Monitoring**: Track spending trends and growth rates
+- **Automated Checks**: Integrate cost validation into your deployment pipeline
 
-## Requirements
+### 📊 Advanced Analytics
+- **Cost Uncertainty Analysis**: Statistical confidence intervals
+- **Timeframe Flexibility**: 1 month to 2 years projections
+- **Resource Breakdown**: Detailed per-resource cost analysis
+- **Real-time Updates**: Automatic refresh when files change
 
-If you have any requirements or dependencies, add a section describing those and how to install and configure them.
+## 🛠️ Installation
 
-## Extension Settings
+### CLI Tool
 
-Include if your extension adds any VS Code settings through the `contributes.configuration` extension point.
+```bash
+# Install from PyPI
+pip install terracost
 
-For example:
+# Or install from source
+git clone https://github.com/yourusername/terracost.git
+cd terracost
+pip install -e .
+```
 
-This extension contributes the following settings:
+**Requirements**: Python 3.8+
 
-* `myExtension.enable`: Enable/disable this extension.
-* `myExtension.thing`: Set to `blah` to do something.
+### VS Code Extension
 
-## Known Issues
+1. Open VS Code
+2. Go to Extensions (Ctrl+Shift+X)
+3. Search for "TerraCost"
+4. Click Install
 
-Calling out known issues can help limit users opening duplicate issues against your extension.
+## 🚀 Basic Usage
 
-## Release Notes
+### Cost Estimation
 
-Users appreciate release notes as you update your extension.
+```bash
+# Estimate costs for your Terraform infrastructure
+terracost plan -f infrastructure/
 
-### 1.0.0
+# Specify timeframe (1m, 3m, 6m, 1y, 2y)
+terracost plan -f . -t 6m
 
-Initial release of ...
+# Detailed breakdown
+terracost plan -f . --verbose
+```
 
-### 1.0.1
+### AI-Powered Suggestions
 
-Fixed issue #.
+```bash
+# Get cost savings recommendations
+terracost suggest --savings
 
-### 1.1.0
+# Fit infrastructure within budget
+terracost suggest --budget 50.0
 
-Added features X, Y, and Z.
+# Find best value configuration
+terracost suggest --bestvalue
+```
+
+### CI/CD Budget Enforcement
+
+```bash
+# Check if costs exceed $2000/month limit
+terracost budget --limit 2000 -f infrastructure/
+```
+
+## 🔧 Configuration
+
+### Environment Variables
+
+```bash
+# Required for AI suggestions
+export OPENAI_API_KEY="your-openai-api-key"
+
+# AWS credentials (optional, for enhanced pricing)
+export AWS_PROFILE="default"
+export AWS_REGION="us-east-1"
+
+# Azure credentials (optional)
+export AZURE_CLIENT_ID="your-client-id"
+export AZURE_TENANT_ID="your-tenant-id"
+export AZURE_CLIENT_SECRET="your-client-secret"
+
+# GCP credentials (optional)
+export GOOGLE_APPLICATION_CREDENTIALS="path/to/service-account.json"
+```
+
+## 📁 Supported Infrastructure
+
+### AWS Resources
+- **Compute**: EC2 instances, Lambda functions, ECS services
+- **Storage**: S3 buckets, EBS volumes, RDS databases
+- **Networking**: VPC, Load Balancers, API Gateway
+- **Security**: IAM roles, Security Groups, KMS keys
+
+### Azure Resources
+- **Compute**: Virtual Machines, App Services, Functions
+- **Storage**: Storage Accounts, Blob Containers, SQL Databases
+- **Networking**: Virtual Networks, Load Balancers, Application Gateway
+- **Security**: Key Vault, Network Security Groups
+
+### GCP Resources
+- **Compute**: Compute Engine, Cloud Functions, App Engine
+- **Storage**: Cloud Storage, Cloud SQL, BigQuery
+- **Networking**: VPC, Load Balancing, Cloud Armor
+- **Security**: IAM, Cloud KMS, Security Command Center
+
+## 🎯 AI Suggestion Types
+
+### Budget Optimization (`--budget`)
+- Analyzes current infrastructure costs
+- Suggests modifications to fit within target budget
+- Provides risk assessment for each change
+- Includes cost estimates for alternatives
+
+### Cost Savings (`--savings`)
+- **Conservative**: Safe changes with minimal risk
+- **Moderate**: Balanced optimization with some risk
+- **Aggressive**: Maximum savings with higher risk
+- Detailed explanations for each strategy
+
+### Best Value (`--bestvalue`)
+- Optimizes cost-performance ratio
+- Considers reliability and scalability
+- Balances upfront vs. ongoing costs
+- Recommends resource sizing optimizations
+
+## 🔄 CI/CD Integration
+
+### Pipeline Budget Check
+
+```bash
+# In your CI/CD pipeline
+terracost budget --limit 2000 -f infrastructure/
+if [ $? -ne 0 ]; then
+    echo "❌ Costs exceed budget limit!"
+    exit 1
+fi
+```
+
+### Cost Growth Monitoring
+
+The tool automatically:
+- Tracks cost changes between pipeline runs
+- Warns about excessive cost growth (>50% by default)
+- Provides detailed cost breakdowns
+- Saves cost reports for historical analysis
+
+## 🎨 VS Code Extension Features
+
+### Sidebar Panel
+- **Costs Tab**: View infrastructure costs with timeframe selection
+- **AI Tab**: Get optimization suggestions directly in VS Code
+- **Real-time Updates**: Automatic refresh when files change
+
+### Inline Cost Display
+- **Ghost Text**: See monthly costs directly in .tf files
+- **Non-intrusive**: Gray text that doesn't interfere with code
+- **Tooltips**: Hover for detailed cost breakdowns
+
+### Seamless Integration
+- **File Watching**: Automatically detects .tf file changes
+- **Context Menus**: Right-click for quick cost calculations
+- **Terminal Integration**: Dedicated terminal for TerraCost commands
+
+## 📊 Example Output
+
+### Cost Estimation
+```
+📊 Infrastructure Analysis
+   📁 Directory: ./infrastructure
+   🔧 Total Resources: 15
+   [AWS] AWS: 8 resources
+   [AZURE] AZURE: 4 resources
+   [GCP] GCP: 3 resources
+
+💰 Total Cost: $247.83/month
+📈 Cost Uncertainty Analysis:
+   📊 68% Confidence: $235.12 - $260.54
+   📊 95% Confidence: $222.41 - $273.25
+   📊 Volatility: 8.2% monthly variation
+```
+
+### AI Suggestions
+```
+🤖 AI-Powered Cost Optimization Suggestions
+
+📋 Conservative Strategy (Low Risk):
+   💰 Estimated Savings: 15-20%
+   🔧 Changes: Instance type optimization, storage tier adjustments
+   ⚠️ Risk: Minimal impact on performance
+
+📋 Moderate Strategy (Balanced):
+   💰 Estimated Savings: 25-35%
+   🔧 Changes: Reserved instances, auto-scaling policies
+   ⚠️ Risk: Some performance variability
+
+📋 Aggressive Strategy (High Risk):
+   💰 Estimated Savings: 40-50%
+   🔧 Changes: Spot instances, aggressive scaling
+   ⚠️ Risk: Potential downtime during scaling
+```
+
+## 🏗️ Architecture
+
+### Core Components
+- **Terraform Parser**: Extracts resources from .tf files
+- **Cost Services**: Provider-specific pricing calculations
+- **AI Service**: OpenAI integration for suggestions
+- **Progress Tracking**: Real-time operation monitoring
+- **CI/CD Service**: Pipeline budget enforcement
+
+### Supported Providers
+- **AWS**: Boto3 integration for pricing
+- **Azure**: Azure SDK for cost estimation
+- **GCP**: Google Cloud client libraries
+- **Multi-cloud**: Unified cost analysis across providers
+
+## 🚧 Requirements
+
+### CLI Tool
+- Python 3.8+
+- Terraform files (.tf) in your project
+- OpenAI API key (for AI suggestions)
+- Cloud provider credentials (optional, for enhanced pricing)
+
+### VS Code Extension
+- VS Code 1.103.0+
+- TerraCost Python package installed
+- Python available in PATH
+- Terraform files in workspace
+
+## 🔍 Troubleshooting
+
+### Common Issues
+
+#### No Cost Estimates Displayed
+- Verify .tf files are in the specified directory
+- Check if Terraform configuration is valid
+- Ensure cloud provider credentials are configured
+
+#### AI Suggestions Not Working
+- Verify `OPENAI_API_KEY` is set
+- Check internet connectivity
+- Ensure Terraform files contain cloud resources
+
+#### CI/CD Pipeline Fails
+- Check budget limits are reasonable
+- Verify cost estimation is working locally
+- Review cost growth warnings
+
+### Debug Mode
+```bash
+# Enable verbose output
+terracost plan -f . --verbose
+
+# Check version
+terracost --version
+```
+
+## 🤝 Contributing
+
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Add tests if applicable
+5. Submit a pull request
+
+### Development Setup
+```bash
+git clone https://github.com/yourusername/terracost.git
+cd terracost
+pip install -e .
+npm install  # For VS Code extension
+```
+
+## 🆘 Support
+
+- **Issues**: Report bugs and feature requests on [GitHub](https://github.com/yourusername/terracost/issues)
+- **Documentation**: Check the [Wiki](https://github.com/yourusername/terracost/wiki) for detailed guides
+- **Community**: Join discussions in the [GitHub Discussions](https://github.com/yourusername/terracost/discussions)
 
 ---
 
-## Following extension guidelines
+**Made with ❤️ by the TerraCost team**
 
-Ensure that you've read through the extensions guidelines and follow the best practices for creating your extension.
+Members:
+- Daniël van Zyl
+- Shailyn Ramsamy Moodley
+- Tevlen Naidoo
 
-* [Extension Guidelines](https://code.visualstudio.com/api/references/extension-guidelines)
-
-## Working with Markdown
-
-You can author your README using Visual Studio Code. Here are some useful editor keyboard shortcuts:
-
-* Split the editor (`Cmd+\` on macOS or `Ctrl+\` on Windows and Linux).
-* Toggle preview (`Shift+Cmd+V` on macOS or `Shift+Ctrl+V` on Windows and Linux).
-* Press `Ctrl+Space` (Windows, Linux, macOS) to see a list of Markdown snippets.
-
-## For more information
-
-* [Visual Studio Code's Markdown Support](http://code.visualstudio.com/docs/languages/markdown)
-* [Markdown Syntax Reference](https://help.github.com/articles/markdown-basics/)
-
-**Enjoy!**
+*TerraCost helps you build cost-effective cloud infrastructure without compromising on performance or reliability.*
