@@ -37,6 +37,8 @@ TerraCost is a comprehensive solution that scans your Terraform infrastructure f
 
 ### CLI Tool
 
+View details here: [terracost · PyPi](https://pypi.org/project/terracost/)
+
 ```bash
 # Install from PyPI
 pip install terracost
@@ -59,6 +61,8 @@ pip install -e .
 6. Click the TerraCost icon to open the extension's panel
 7. Enjoy!
 
+Or visit: [TerraCost · VSCode Extension Marketplace](https://marketplace.visualstudio.com/items?itemName=shailyn1739.TerraCost)
+
 ## 🚀 Basic Usage
 
 ### Cost Estimation
@@ -72,6 +76,9 @@ terracost plan -f . -t 6m
 
 # Detailed breakdown
 terracost plan -f . --verbose
+
+# Get help and a list of all commands
+terracost --help
 ```
 
 ### AI-Powered Suggestions
