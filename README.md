@@ -42,7 +42,7 @@ TerraCost is a comprehensive solution that scans your Terraform infrastructure f
 pip install terracost
 
 # Or install from source
-git clone https://github.com/yourusername/terracost.git
+git clone https://github.com/DTS-BBD/TerraCost.git
 cd terracost
 pip install -e .
 ```
