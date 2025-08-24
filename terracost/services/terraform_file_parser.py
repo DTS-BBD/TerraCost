@@ -350,7 +350,10 @@ class TerraformFileParser:
             
             # Handle local module sources
             if source.startswith('./') or source.startswith('../'):
-                module_path = os.path.join(self.working_dir, source)
+                # Normalize path separators for the current OS
+                normalized_source = os.path.normpath(source)
+                module_path = os.path.join(self.working_dir, normalized_source)
+                
                 if os.path.exists(module_path):
                     # Recursively parse the module directory
                     module_parser = TerraformFileParser(module_path)
@@ -358,7 +361,7 @@ class TerraformFileParser:
                         module_result = module_parser.parse_terraform_files(show_progress=False)
                         
                         # Merge resources from the module
-                        print(f"   🔍 Processing module {module_name} from {source}")
+                        print(f"   🔍 Processing module {module_name} from {normalized_source}")
                         
                         # Count total resources found in this module
                         total_module_resources = 0
@@ -388,7 +391,7 @@ class TerraformFileParser:
                                 print(f"      Added {len(resources_to_add)} {resource_type} resources from {module_name}")
                     
                     except Exception as e:
-                        print(f"   ⚠️  Warning: Could not parse module {source}: {e}")
+                        print(f"   ⚠️  Warning: Could not parse module {normalized_source}: {e}")
                 else:
                     print(f"   ⚠️  Warning: Module path not found: {module_path}")
             else:
