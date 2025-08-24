@@ -1,6 +1,7 @@
 import time
 import threading
 import sys
+import platform
 from typing import Optional
 
 class ProgressIndicator:
@@ -10,7 +11,11 @@ class ProgressIndicator:
         self.message = message
         self.running = False
         self.thread = None
-        self.spinner_chars = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
+        # Use Windows-compatible spinner characters
+        if platform.system() == "Windows":
+            self.spinner_chars = ["|", "/", "-", "\\"]
+        else:
+            self.spinner_chars = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
         self.current_char = 0
         self.start_time = None
         self.elapsed_time = 0
@@ -37,7 +42,11 @@ class ProgressIndicator:
         
         # Clear the line and show final message
         sys.stdout.write('\r' + ' ' * (len(self.message) + 10) + '\r')
-        sys.stdout.write(f"✅ {final_message}\n")
+        # Use Windows-compatible symbols
+        if platform.system() == "Windows":
+            sys.stdout.write(f"[OK] {final_message}\n")
+        else:
+            sys.stdout.write(f"✅ {final_message}\n")
         sys.stdout.flush()
     
     def _animate(self):
@@ -66,15 +75,37 @@ class ProgressIndicator:
 class CostCalculationProgress:
     """Specialized progress indicator for cost calculation steps"""
     
-    def __init__(self):
+    def __init__(self, operation_type="cost_calculation"):
         self.progress = ProgressIndicator()
-        self.steps = [
-            "Parsing Terraform files...",
-            "Extracting resource information...",
-            "Fetching cloud pricing data...",
-            "Calculating cost estimates...",
-            "Generating uncertainty analysis..."
-        ]
+        self.operation_type = operation_type
+        
+        # Different step sets for different operations
+        if operation_type == "cost_calculation":
+            self.steps = [
+                "📁 Scanning for Terraform files...",
+                "🔍 Processing modules...",
+                "📊 Extracting resource information...",
+                "🌐 Fetching cloud pricing data...",
+                "💰 Calculating cost estimates...",
+                "📈 Generating uncertainty analysis..."
+            ]
+        elif operation_type == "suggest":
+            self.steps = [
+                "🔍 Analyzing current infrastructure...",
+                "📊 Calculating current costs...",
+                "🤖 Generating AI suggestions...",
+                "💡 Processing optimization ideas...",
+                "📋 Compiling recommendations...",
+                "✨ Finalizing suggestions..."
+            ]
+        else:
+            self.steps = [
+                "⚙️ Processing...",
+                "🔄 Working...",
+                "📝 Analyzing...",
+                "✅ Completing..."
+            ]
+        
         self.current_step = 0
     
     def start(self):
@@ -91,9 +122,15 @@ class CostCalculationProgress:
     def stop(self, success: bool = True):
         """Stop the progress indicator"""
         if success:
-            self.progress.stop("Cost estimation completed!")
+            if self.operation_type == "suggest":
+                self.progress.stop("AI suggestions generated successfully!")
+            else:
+                self.progress.stop("Cost estimation completed!")
         else:
-            self.progress.stop("Cost estimation failed!")
+            if self.operation_type == "suggest":
+                self.progress.stop("AI suggestions generation failed!")
+            else:
+                self.progress.stop("Cost estimation failed!")
 
 def show_loading_animation(func):
     """Decorator to show loading animation during function execution"""

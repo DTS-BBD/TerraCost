@@ -1,11 +1,15 @@
 import argparse
 import sys
 import re
+import platform
 from typing import List
 from pydantic import BaseModel, Field
 from terracost.services.aws_cost_service import AwsCostService
+from terracost.services.azure_cost_service import AzureCostService
+from terracost.services.gcp_cost_service import GCPCostService
 from terracost.services.terraform_file_parser import TerraformFileParser
 from terracost.services.progress_indicator import CostCalculationProgress
+from terracost.services.suggest_progress import SuggestStepTracker
 from terracost.services.suggest_service import suggest_budget, suggest_savings, suggest_best_value
 from terracost.services.cicd_service import run_pipeline_check
 
@@ -28,6 +32,48 @@ class CostEstimate(BaseModel):
 # =====================
 # Helper Functions
 # =====================
+
+def get_symbol(symbol_name: str) -> str:
+    """Get platform-appropriate symbol for output"""
+    if platform.system() == "Windows":
+        symbols = {
+            "check": "[OK]",
+            "cross": "[ERROR]",
+            "folder": "[DIR]",
+            "wrench": "[TOOL]",
+            "package": "[PKG]",
+            "search": "[SEARCH]",
+            "list": "[LIST]",
+            "rocket": "[ROCKET]",
+            "target": "[TARGET]",
+            "gear": "[GEAR]",
+            "box": "[BOX]",
+            "clipboard": "[CLIP]",
+            "checklist": "[CHECKLIST]",
+            "tada": "[SUCCESS]",
+            "warning": "[WARN]",
+            "chart": "[CHART]"
+        }
+        return symbols.get(symbol_name, "[INFO]")
+    else:
+        symbols = {
+            "check": "✅",
+            "cross": "❌",
+            "folder": "📁",
+            "wrench": "🔧",
+            "package": "📦",
+            "search": "🔍",
+            "list": "📋",
+            "rocket": "🚀",
+            "target": "🎯",
+            "gear": "⚙️",
+            "box": "📦",
+            "clipboard": "📋",
+            "checklist": "📋",
+            "tada": "🎉",
+            "warning": "⚠️"
+        }
+        return symbols.get(symbol_name, "ℹ️")
 
 def parse_timeframe(tf: str) -> float:
     """
@@ -70,20 +116,46 @@ def estimate_cost_from_files(months: float, verbose: bool, working_dir: str) -> 
         # Step 3: Fetch cloud pricing data
         progress.next_step()
         
-        # Use AWS cost service (currently only AWS is supported)
-        service = AwsCostService()
-        infrastructure = resources.get('aws', {})
-        
-        # Step 4: Calculate cost estimates
+        # Step 4: Calculate cost estimates for all cloud providers
         progress.next_step()
-        costs = service.build_costs(infrastructure)
         
-        breakdown = [ResourceCost(name=r, monthly_cost=c) for r, c in costs.items()]
-        total_monthly = sum(rc.monthly_cost for rc in breakdown)
+        all_costs = {}
+        total_monthly = 0.0
+        
+        # AWS costs
+        if resources.get('aws'):
+            aws_service = AwsCostService()
+            aws_costs = aws_service.build_costs(resources['aws'])
+            all_costs.update({f"aws.{k}": v for k, v in aws_costs.items()})
+            total_monthly += sum(aws_costs.values())
+        
+        # Azure costs
+        if resources.get('azure'):
+            azure_service = AzureCostService()
+            azure_costs = azure_service.build_costs(resources['azure'])
+            all_costs.update({f"azure.{k}": v for k, v in azure_costs.items()})
+            total_monthly += sum(azure_costs.values())
+        
+        # GCP costs
+        if resources.get('gcp'):
+            gcp_service = GCPCostService()
+            gcp_costs = gcp_service.build_costs(resources['gcp'])
+            all_costs.update({f"gcp.{k}": v for k, v in gcp_costs.items()})
+            total_monthly += sum(gcp_costs.values())
+        
+        # Other/unknown resources
+        if resources.get('other'):
+            # Estimate costs for unknown resources
+            other_costs = {f"other.{k}": 10.0 for k in resources['other'].keys()}
+            all_costs.update(other_costs)
+            total_monthly += sum(other_costs.values())
+        
+        breakdown = [ResourceCost(name=r, monthly_cost=c) for r, c in all_costs.items()]
         total_cost = total_monthly * months
         
-        # Step 5: Generate uncertainty analysis
+        # Step 5: Generate uncertainty analysis (use AWS service as default)
         progress.next_step()
+        service = AwsCostService()  # Default service for uncertainty calculation
         uncertainty = service.estimate_uncertainty(total_monthly, months)
         
         estimate = CostEstimate(
@@ -110,38 +182,45 @@ def estimate_cost_from_files(months: float, verbose: bool, working_dir: str) -> 
 
 def _display_cost_estimate(estimate: CostEstimate, verbose: bool, plan_summary: dict):
     """Display the cost estimate with uncertainty analysis"""
-    print(f"\n📊 Cost Estimate for {estimate.timeframe_months:.1f} month(s)")
+    print(f"\n{get_symbol('chart')} Cost Estimate for {estimate.timeframe_months:.1f} month(s)")
     print("=" * 50)
     
     # Display infrastructure summary
     if plan_summary:
-        print(f"📋 Infrastructure Summary:")
-        print(f"   📁 Total Terraform files: {plan_summary.get('modules_count', 0) + 1}")
-        print(f"   🔧 Total resources: {plan_summary.get('total_resources', 0)}")
-        print(f"   📦 Modules: {plan_summary.get('modules_count', 0)}")
+        print(f"{get_symbol('checklist')} Infrastructure Summary:")
+        print(f"   {get_symbol('folder')} Total Terraform files: {plan_summary.get('modules_count', 0) + 1}")
+        print(f"   {get_symbol('wrench')} Total resources: {plan_summary.get('total_resources', 0)}")
+        print(f"   {get_symbol('package')} Modules: {plan_summary.get('modules_count', 0)}")
         
         # Show provider breakdown
         provider_counts = plan_summary.get('provider_counts', {})
         for provider, count in provider_counts.items():
             if count > 0:
-                provider_emoji = "☁️" if provider == "aws" else "🔷" if provider == "azure" else "🔶"
-                print(f"   {provider_emoji} {provider.upper()} resources: {count}")
+                if provider == "aws":
+                    provider_symbol = "[AWS]"
+                elif provider == "azure":
+                    provider_symbol = "[AZURE]"
+                elif provider == "gcp":
+                    provider_symbol = "[GCP]"
+                else:
+                    provider_symbol = "[OTHER]"
+                print(f"   {provider_symbol} {provider.upper()} resources: {count}")
         print()
     
     # Display cost breakdown
-    print(f"💰 Total Cost: ${estimate.total_cost:.2f}")
+    print(f"[COST] Total Cost: ${estimate.total_cost:.2f}")
     
     # Display uncertainty analysis
     if estimate.uncertainty_analysis:
         uncertainty = estimate.uncertainty_analysis
-        print(f"📈 Cost Uncertainty Analysis:")
-        print(f"   📊 68% Confidence: ${uncertainty['confidence_68_lower']:.2f} - ${uncertainty['confidence_68_upper']:.2f}")
-        print(f"   📊 95% Confidence: ${uncertainty['confidence_95_lower']:.2f} - ${uncertainty['confidence_95_upper']:.2f}")
-        print(f"   📈 Volatility: {uncertainty['volatility']*100:.1f}% monthly variation")
+        print(f"{get_symbol('chart')} Cost Uncertainty Analysis:")
+        print(f"   {get_symbol('chart')} 68% Confidence: ${uncertainty['confidence_68_lower']:.2f} - ${uncertainty['confidence_68_upper']:.2f}")
+        print(f"   {get_symbol('chart')} 95% Confidence: ${uncertainty['confidence_95_lower']:.2f} - ${uncertainty['confidence_95_upper']:.2f}")
+        print(f"   {get_symbol('chart')} Volatility: {uncertainty['volatility']*100:.1f}% monthly variation")
         print()
     
     if verbose:
-        print("📋 Detailed Breakdown (per resource):")
+        print(f"{get_symbol('checklist')} Detailed Breakdown (per resource):")
         for rc in estimate.breakdown:
             print(f"   - {rc.name:40} ${rc.monthly_cost:.2f}/month")
         print()
@@ -233,8 +312,8 @@ def main():
             estimate_cost_from_files(months=months, verbose=args.verbose, 
                                   working_dir=infrastructure_file)
         except Exception as e:
-            print(f"❌ Error: {str(e)}")
-            print("\n🔧 Troubleshooting Tips:")
+            print(f"{get_symbol('cross')} Error: {str(e)}")
+            print(f"\n{get_symbol('wrench')} Troubleshooting Tips:")
             print("   • Check if you're in the right directory with Terraform files")
             print("   • Verify your Terraform configuration is valid")
             print("   • Check if .tf files are readable and properly formatted")
@@ -246,42 +325,110 @@ def main():
         infrastructure_file = args.file
         
         try:
+            # Initialize progress tracking
+            progress_tracker = SuggestStepTracker()
+            progress_tracker.start_analysis()
+            
             # Parse infrastructure to get current resources
             parser = TerraformFileParser(infrastructure_file)
             parse_result = parser.parse_terraform_files(show_progress=False)
-            infrastructure = parse_result['resources'].get('aws', {})
+            all_resources = parse_result['resources']
             
-            if not infrastructure:
-                print("❌ No AWS resources found in the specified directory")
+            # Check if any cloud resources exist
+            total_resources = sum(len(resources) for resources in all_resources.values())
+            if total_resources == 0:
+                progress_tracker.progress.stop(False)
+                print(f"{get_symbol('cross')} No cloud resources found in the specified directory")
                 sys.exit(1)
             
-            # Get current cost estimate for context
-            service = AwsCostService()
-            current_costs = service.build_costs(infrastructure)
-            current_total = sum(current_costs.values())
+            # Report infrastructure parsing completion
+            file_count = parse_result.get('summary', {}).get('modules_count', 0) + 1
+            progress_tracker.infrastructure_parsed(file_count, total_resources)
             
-            print(f"📊 Current Infrastructure Analysis")
-            print(f"   📁 Directory: {infrastructure_file}")
-            print(f"   🔧 Resources: {sum(len(resources) for resources in infrastructure.values())}")
-            print(f"   💰 Current monthly cost: ${current_total:.2f}")
+            # Get current cost estimate for all providers
+            all_costs = {}
+            current_total = 0.0
+            
+            # AWS costs
+            if all_resources.get('aws'):
+                aws_service = AwsCostService()
+                aws_costs = aws_service.build_costs(all_resources['aws'])
+                all_costs.update(aws_costs)
+                aws_total = sum(aws_costs.values())
+                current_total += aws_total
+                progress_tracker.provider_costs_calculated("AWS", len(all_resources['aws']), aws_total)
+            
+            # Azure costs
+            if all_resources.get('azure'):
+                azure_service = AzureCostService()
+                azure_costs = azure_service.build_costs(all_resources['azure'])
+                all_costs.update(azure_costs)
+                azure_total = sum(azure_costs.values())
+                current_total += azure_total
+                progress_tracker.provider_costs_calculated("Azure", len(all_resources['azure']), azure_total)
+            
+            # GCP costs
+            if all_resources.get('gcp'):
+                gcp_service = GCPCostService()
+                gcp_costs = gcp_service.build_costs(all_resources['gcp'])
+                all_costs.update(gcp_costs)
+                gcp_total = sum(gcp_costs.values())
+                current_total += gcp_total
+                progress_tracker.provider_costs_calculated("GCP", len(all_resources['gcp']), gcp_total)
+            
+            # Start AI generation phase (this is separate from cost calculation)
+            progress_tracker.ai_generation_started()
+            
+            # Display infrastructure summary
+            print(f"\n{get_symbol('chart')} Current Infrastructure Analysis")
+            print(f"   {get_symbol('folder')} Directory: {infrastructure_file}")
+            print(f"   {get_symbol('wrench')} Total Resources: {total_resources}")
+            
+            # Show provider breakdown
+            for provider, resources in all_resources.items():
+                if resources:
+                    if provider == "aws":
+                        provider_symbol = "[AWS]"
+                    elif provider == "azure":
+                        provider_symbol = "[AZURE]"
+                    elif provider == "gcp":
+                        provider_symbol = "[GCP]"
+                    else:
+                        provider_symbol = "[OTHER]"
+                    print(f"   {provider_symbol} {provider.upper()}: {len(resources)} resources")
+            
+            print(f"   [COST] Current monthly cost: ${current_total:.2f}")
             print()
             
+            # Start optimization processing phase
+            progress_tracker.optimization_processing()
+            
             if args.budget:
-                suggest_budget(args.budget, infrastructure)
+                progress_tracker.progress.update_message(f"Generating AI-powered budget optimization suggestions (target: ${args.budget}/month)...")
+                suggest_budget(args.budget, all_resources)
             elif args.savings:
-                suggest_savings(infrastructure)
+                progress_tracker.progress.update_message("Generating AI-powered cost savings suggestions...")
+                suggest_savings(all_resources)
             elif args.bestvalue:
-                suggest_best_value(infrastructure)
+                progress_tracker.progress.update_message("Generating AI-powered best value recommendations...")
+                suggest_best_value(all_resources)
             else:
-                print("⚠️ Please provide one option: --budget, --savings, or --bestvalue")
+                progress_tracker.progress.stop(False)
+                print(f"{get_symbol('warning')} Please provide one option: --budget, --savings, or --bestvalue")
                 print("\nExamples:")
                 print("   terracost suggest --budget 20.0    # Fit within $20/month budget")
                 print("   terracost suggest --savings        # Get savings suggestions")
                 print("   terracost suggest --bestvalue      # Get best value suggestions")
+                sys.exit(1)
+            
+            # Complete the process
+            result = progress_tracker.complete(True)
                 
         except Exception as e:
-            print(f"❌ Error: {str(e)}")
-            print("\n🔧 Troubleshooting Tips:")
+            if 'progress_tracker' in locals():
+                progress_tracker.progress.stop(False)
+            print(f"{get_symbol('cross')} Error: {str(e)}")
+            print(f"\n{get_symbol('wrench')} Troubleshooting Tips:")
             print("   • Check if you're in the right directory with Terraform files")
             print("   • Verify your Terraform configuration is valid")
             print("   • Make sure OPENAI_API_KEY is set for LLM suggestions")
