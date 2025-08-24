@@ -4,11 +4,9 @@ import re
 from typing import List
 from pydantic import BaseModel, Field
 from terracost.services.aws_cost_service import AwsCostService
-from terracost.services.azure_cost_service import AzureCostService
 from terracost.services.terraform_file_parser import TerraformFileParser
 from terracost.services.progress_indicator import CostCalculationProgress
-from terracost.services.terraform_parser import detect_provider, parse_infrastructure, parse_azure_infrastructure
-from terracost.services.suggest_service import suggest_best_value, suggest_budget, suggest_savings
+from terracost.services.suggest_service import suggest_budget, suggest_savings, suggest_best_value
 
 __version__ = "0.1.0"
 
@@ -71,23 +69,9 @@ def estimate_cost_from_files(months: float, verbose: bool, working_dir: str) -> 
         # Step 3: Fetch cloud pricing data
         progress.next_step()
         
-        # Determine provider and get cost service
-        provider = "aws"  # Default, will be updated based on resources
-        if resources.get('azure'):
-            provider = "azure"
-        elif resources.get('gcp'):
-            provider = "gcp"
-        
-        if provider == "azure":
-            service = AzureCostService()
-            infrastructure = resources.get('azure', {})
-        elif provider == "gcp":
-            # TODO: Implement GCP cost service
-            raise NotImplementedError("GCP cost estimation not yet implemented")
-        else:
-            service = AwsCostService()
-            # Pass AWS resources directly to the cost service for dynamic processing
-            infrastructure = resources.get('aws', {})
+        # Use AWS cost service (currently only AWS is supported)
+        service = AwsCostService()
+        infrastructure = resources.get('aws', {})
         
         # Step 4: Calculate cost estimates
         progress.next_step()
@@ -161,43 +145,10 @@ def _display_cost_estimate(estimate: CostEstimate, verbose: bool, plan_summary: 
             print(f"   - {rc.name:40} ${rc.monthly_cost:.2f}/month")
         print()
 
-def estimate_cost(months: float, verbose: bool, infrastructure: dict, provider: str) -> CostEstimate:
-    """
-    Legacy cost estimation (kept for backward compatibility)
-    """
-    if provider == "azure":
-        service = AzureCostService()
-    else:
-        service = AwsCostService()
 
-    costs = service.build_costs(infrastructure)
 
-    breakdown = [ResourceCost(name=r, monthly_cost=c * months) for r, c in costs.items()]
-    total = sum(rc.monthly_cost for rc in breakdown)
 
-    estimate = CostEstimate(
-        timeframe_months=months,
-        total_cost=total,
-        breakdown=breakdown
-    )
 
-    print(f"\nEstimated Cost for {months:.1f} month(s): ${estimate.total_cost:.2f}\n")
-    if verbose:
-        print("Breakdown (per resource):")
-        for rc in estimate.breakdown:
-            print(f"- {rc.name:30} ${rc.monthly_cost:.2f}")
-
-    return estimate
-
-def suggest_cost_optimizations(months: float):
-    """
-    Dummy cost optimization suggestions (later: LLM or rule-based).
-    """
-    print(f"\nEstimated cost for {months:.1f} month(s): $4,200 (dummy)\n")
-    print("Cost Optimization Suggestions:")
-    print("- Consider using t3.medium instead of t2.large for web_server (saves ~$30/mo).")
-    print("- Use S3 infrequent access for logs (saves ~50%).")
-    print("- Reserved RDS instance could save ~35% long term.\n")
 
 # =====================
 # CLI Entrypoint
@@ -231,23 +182,20 @@ def main():
         "-f", "--file", type=str, default=".",
         help="Folder location with your Terraform infrastructure (default: current directory)"
     )
-    plan_parser.add_argument(
-        "--legacy", action="store_true",
-        help="Use legacy parsing (parse .tf files directly instead of running terraform plan)"
-    )
 
     # ---- suggest ----
-    suggest_parser = subparsers.add_parser("suggest", help="Suggest cost optimizations")
+    suggest_parser = subparsers.add_parser("suggest", help="Get LLM-based cost optimization suggestions")
     suggest_parser.add_argument(
         "-t", "--timeframe", type=str, default="1m",
         help="Timeframe for cost estimation (Xd, Xm, Xy). Default: 1m"
     )
     suggest_parser.add_argument(
-        "-f", "--file", type=str, default=".", help="Folder location with your infrastructure (default: current directory)"
+        "-f", "--file", type=str, default=".", 
+        help="Folder location with your infrastructure (default: current directory)"
     )
     suggest_parser.add_argument(
         "--budget", type=float,
-        help="Suggests infrastructure combination based on provided budget"
+        help="Suggest infrastructure modifications to fit within budget"
     )
     suggest_parser.add_argument(
         "--savings", action="store_true",
@@ -266,52 +214,67 @@ def main():
         sys.exit(0)
 
     # ---- plan ----
-    if args.command == "plan":
+    elif args.command == "plan":
         months = parse_timeframe(args.timeframe)
         infrastructure_file = args.file
         
-        if args.legacy:
-            # Use legacy parsing method
-            provider = detect_provider(infrastructure_file)
-            if provider == "azure":
-                infrastructure = parse_azure_infrastructure(infrastructure_file)
-            else:
-                infrastructure = parse_infrastructure(infrastructure_file)
-            estimate_cost(months=months, verbose=args.verbose, 
-                         infrastructure=infrastructure, provider=provider)
-        else:
-            # Use new terraform file parsing method
-            try:
-                estimate_cost_from_files(months=months, verbose=args.verbose, 
-                                      working_dir=infrastructure_file)
-            except Exception as e:
-                print(f"❌ Error: {str(e)}")
-                print("\n🔧 Troubleshooting Tips:")
-                print("   • Check if you're in the right directory with Terraform files")
-                print("   • Verify your Terraform configuration is valid")
-                print("   • Use --legacy flag for basic .tf file parsing instead")
-                print("   • Check if .tf files are readable and properly formatted")
-                sys.exit(1)
+        try:
+            estimate_cost_from_files(months=months, verbose=args.verbose, 
+                                  working_dir=infrastructure_file)
+        except Exception as e:
+            print(f"❌ Error: {str(e)}")
+            print("\n🔧 Troubleshooting Tips:")
+            print("   • Check if you're in the right directory with Terraform files")
+            print("   • Verify your Terraform configuration is valid")
+            print("   • Check if .tf files are readable and properly formatted")
+            sys.exit(1)
 
     # ---- suggest ----
     elif args.command == "suggest":
         months = parse_timeframe(args.timeframe)
         infrastructure_file = args.file
-        provider = detect_provider(infrastructure_file)
         
-        if provider == "azure":
-            infrastructure = parse_azure_infrastructure(infrastructure_file)
-        else:
-            infrastructure = parse_azure_infrastructure(infrastructure_file)
+        try:
+            # Parse infrastructure to get current resources
+            parser = TerraformFileParser(infrastructure_file)
+            parse_result = parser.parse_terraform_files(show_progress=False)
+            infrastructure = parse_result['resources'].get('aws', {})
             
-        if args.budget:
-            suggest_budget(args.budget, infrastructure)
-        elif args.savings:
-            suggest_savings(infrastructure)
-        elif args.bestvalue:
-            suggest_best_value(infrastructure)
-        else:
-            print("⚠️ Please provide one option: --budget, --savings, or --best-value")
+            if not infrastructure:
+                print("❌ No AWS resources found in the specified directory")
+                sys.exit(1)
+            
+            # Get current cost estimate for context
+            service = AwsCostService()
+            current_costs = service.build_costs(infrastructure)
+            current_total = sum(current_costs.values())
+            
+            print(f"📊 Current Infrastructure Analysis")
+            print(f"   📁 Directory: {infrastructure_file}")
+            print(f"   🔧 Resources: {sum(len(resources) for resources in infrastructure.values())}")
+            print(f"   💰 Current monthly cost: ${current_total:.2f}")
+            print()
+            
+            if args.budget:
+                suggest_budget(args.budget, infrastructure)
+            elif args.savings:
+                suggest_savings(infrastructure)
+            elif args.bestvalue:
+                suggest_best_value(infrastructure)
+            else:
+                print("⚠️ Please provide one option: --budget, --savings, or --bestvalue")
+                print("\nExamples:")
+                print("   terracost suggest --budget 20.0    # Fit within $20/month budget")
+                print("   terracost suggest --savings        # Get savings suggestions")
+                print("   terracost suggest --bestvalue      # Get best value suggestions")
+                
+        except Exception as e:
+            print(f"❌ Error: {str(e)}")
+            print("\n🔧 Troubleshooting Tips:")
+            print("   • Check if you're in the right directory with Terraform files")
+            print("   • Verify your Terraform configuration is valid")
+            print("   • Make sure OPENAI_API_KEY is set for LLM suggestions")
+            sys.exit(1)
 
     else:
         parser.print_help()
