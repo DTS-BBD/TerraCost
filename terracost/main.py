@@ -288,7 +288,7 @@ def main():
 
     budget_parser = subparsers.add_parser("budget", help="Generate a cost breakdown budget and check cost limit")
     budget_parser.add_argument(
-        "--budget", type=float,
+        "--limit", type=float,
         help="Specify budget limit"
     )
     budget_parser.add_argument(
@@ -436,9 +436,9 @@ def main():
 
     elif args.command == "budget":
         infrastructure_file = args.file
-        budget = args.budget
+        limit = args.limit
         try:
-            run_pipeline_check(infrastructure_file, budget)
+            run_pipeline_check(infrastructure_file, limit)
         except Exception as e:
             print(f"❌ Error: {str(e)}")      
     else:
