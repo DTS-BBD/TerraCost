@@ -11,6 +11,7 @@ from terracost.services.terraform_file_parser import TerraformFileParser
 from terracost.services.progress_indicator import CostCalculationProgress
 from terracost.services.suggest_progress import SuggestStepTracker
 from terracost.services.suggest_service import suggest_budget, suggest_savings, suggest_best_value
+from terracost.services.cicd_service import run_pipeline_check
 
 __version__ = "0.1.0"
 
@@ -285,6 +286,16 @@ def main():
         help="Suggest infrastructure that offers the best bang for your buck"
     )
 
+    budget_parser = subparsers.add_parser("budget", help="Generate a cost breakdown budget and check cost limit")
+    budget_parser.add_argument(
+        "--budget", type=float,
+        help="Specify budget limit"
+    )
+    budget_parser.add_argument(
+        "-f", "--file", type=str, default=".", 
+        help="Folder location with your infrastructure (default: current directory)"
+    )
+
     args = parser.parse_args()
 
     # ---- handle version ----
@@ -423,6 +434,13 @@ def main():
             print("   • Make sure OPENAI_API_KEY is set for LLM suggestions")
             sys.exit(1)
 
+    elif args.command == "budget":
+        infrastructure_file = args.file
+        budget = args.budget
+        try:
+            run_pipeline_check(infrastructure_file, budget)
+        except Exception as e:
+            print(f"❌ Error: {str(e)}")      
     else:
         parser.print_help()
 
