@@ -55,6 +55,9 @@ pip install -e .
 2. Go to Extensions (Ctrl+Shift+X)
 3. Search for "TerraCost"
 4. Click Install
+5. An icon will appear on the extension sidebar
+6. Click the TerraCost icon to open the extension's panel
+7. Enjoy!
 
 ## 🚀 Basic Usage
 
