@@ -207,6 +207,16 @@ def main():
         help="Suggest infrastructure that offers the best bang for your buck"
     )
 
+    budget_parser = subparsers.add_parser("budget", help="Generate a cost breakdown budget and check cost limit")
+    budget_parser.add_argument(
+        "--budget", type=float,
+        help="Specify budget limit"
+    )
+    budget_parser.add_argument(
+        "-f", "--file", type=str, default=".", 
+        help="Folder location with your infrastructure (default: current directory)"
+    )
+
     args = parser.parse_args()
 
     # ---- handle version ----
@@ -277,9 +287,15 @@ def main():
             print("   • Make sure OPENAI_API_KEY is set for LLM suggestions")
             sys.exit(1)
 
+    elif args.command == "budget":
+        infrastructure_file = args.file
+        budget = args.budget
+        try:
+            run_pipeline_check(infrastructure_file, budget)
+        except Exception as e:
+            print(f"❌ Error: {str(e)}")      
     else:
         parser.print_help()
 
 if __name__ == "__main__":
-    # main()
-    run_pipeline_check("../infrastructure", 20)
+    main()
