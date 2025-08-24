@@ -28,7 +28,7 @@ def read_requirements():
 
 setup(
     name="terracost",
-    version="0.1.0",
+    version="0.1.1",
     author="Your Name",
     author_email="your.email@example.com",
     description="TerraCost - Multi-cloud Terraform cost estimation and AI-powered optimization tool",
