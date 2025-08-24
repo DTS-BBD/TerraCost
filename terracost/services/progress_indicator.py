@@ -12,6 +12,8 @@ class ProgressIndicator:
         self.thread = None
         self.spinner_chars = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
         self.current_char = 0
+        self.start_time = None
+        self.elapsed_time = 0
     
     def start(self):
         """Start the progress indicator in a separate thread"""
@@ -19,6 +21,7 @@ class ProgressIndicator:
             return
         
         self.running = True
+        self.start_time = time.time()
         self.thread = threading.Thread(target=self._animate)
         self.thread.daemon = True
         self.thread.start()
@@ -38,10 +41,19 @@ class ProgressIndicator:
         sys.stdout.flush()
     
     def _animate(self):
-        """Animate the spinner"""
+        """Animate the spinner with elapsed time"""
         while self.running:
             spinner = self.spinner_chars[self.current_char]
-            sys.stdout.write(f'\r{spinner} {self.message}')
+            elapsed = time.time() - self.start_time
+            elapsed_str = f"({elapsed:.1f}s)"
+            
+            # Show elapsed time after 5 seconds
+            if elapsed > 5:
+                display_message = f"{self.message} {elapsed_str}"
+            else:
+                display_message = self.message
+            
+            sys.stdout.write(f'\r{spinner} {display_message}')
             sys.stdout.flush()
             
             self.current_char = (self.current_char + 1) % len(self.spinner_chars)
@@ -57,8 +69,8 @@ class CostCalculationProgress:
     def __init__(self):
         self.progress = ProgressIndicator()
         self.steps = [
-            "Running Terraform plan...",
-            "Parsing infrastructure changes...",
+            "Parsing Terraform files...",
+            "Extracting resource information...",
             "Fetching cloud pricing data...",
             "Calculating cost estimates...",
             "Generating uncertainty analysis..."
