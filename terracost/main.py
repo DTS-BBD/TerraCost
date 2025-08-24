@@ -7,6 +7,7 @@ from terracost.services.aws_cost_service import AwsCostService
 from terracost.services.terraform_file_parser import TerraformFileParser
 from terracost.services.progress_indicator import CostCalculationProgress
 from terracost.services.suggest_service import suggest_budget, suggest_savings, suggest_best_value
+from terracost.services.cicd_service import run_pipeline_check
 
 __version__ = "0.1.0"
 
@@ -280,4 +281,5 @@ def main():
         parser.print_help()
 
 if __name__ == "__main__":
-    main()
+    # main()
+    run_pipeline_check("../infrastructure", 20)
