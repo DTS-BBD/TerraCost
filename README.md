@@ -181,17 +181,6 @@ The tool automatically:
 ### Sidebar Panel
 - **Costs Tab**: View infrastructure costs with timeframe selection
 - **AI Tab**: Get optimization suggestions directly in VS Code
-- **Real-time Updates**: Automatic refresh when files change
-
-### Inline Cost Display
-- **Ghost Text**: See monthly costs directly in .tf files
-- **Non-intrusive**: Gray text that doesn't interfere with code
-- **Tooltips**: Hover for detailed cost breakdowns
-
-### Seamless Integration
-- **File Watching**: Automatically detects .tf file changes
-- **Context Menus**: Right-click for quick cost calculations
-- **Terminal Integration**: Dedicated terminal for TerraCost commands
 
 ## 📊 Example Output
 
@@ -256,9 +245,6 @@ The tool automatically:
 
 ### VS Code Extension
 - VS Code 1.103.0+
-- TerraCost Python package installed
-- Python available in PATH
-- Terraform files in workspace
 
 ## 🔍 Troubleshooting
 
